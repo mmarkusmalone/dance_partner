@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Aura + Pose Tracker</title>
+    <!-- MediaPipe + Drawing Utils -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/holistic/holistic.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js"></script>
+
+    <!-- <link rel="stylesheet" href="style.css" /> -->
+    <style>
+      body {
+        margin: 0;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        background: #000;
+        overflow: hidden;
+      }
+      .canvas-wrapper {
+        position: relative;
+        width: 640px;
+        height: 480px;
+      }
+      #webcam {
+        display: none;
+      }
+      #webglAura {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 640px;
+        height: 480px;
+        transform: scaleY(-1); /* Flip vertically */
+        z-index: 0;
+      }
+      #output {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 640px;
+        height: 480px;
+        z-index: 1;
+        /* Do not flip this one */
+      }
+      #output {
+        z-index: 1;
+      }
+      #webglAura {
+        z-index: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <video id="webcam" autoplay playsinline></video>
+    <div class="canvas-wrapper">
+      <canvas id="webglAura" width="640" height="480"></canvas>
+      <canvas id="output" width="640" height="480"></canvas>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
