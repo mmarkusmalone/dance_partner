@@ -5,7 +5,6 @@ const auraCanvas = document.getElementById('webglAura');
 auraCanvas.width = 640;
 auraCanvas.height = 480;
 const gl = auraCanvas.getContext('webgl', { alpha: true });
-gl.clearColor(0.2, 0.0, 0.2, 1.0); // dark pink background
 
 const audioContext = new AudioContext();
 const analyser = audioContext.createAnalyser();
@@ -18,11 +17,39 @@ navigator.mediaDevices.getUserMedia({ audio: true }).then((stream) => {
   micSource.connect(analyser);
 });
 
+// === COLORS ===
+function hexToRGBVec3(hex) {
+  const r = parseInt(hex.slice(1, 3), 16) / 255;
+  const g = parseInt(hex.slice(3, 5), 16) / 255;
+  const b = parseInt(hex.slice(5, 7), 16) / 255;
+  return [r, g, b];
+}
 
-// Request microphone access
-navigator.mediaDevices.getUserMedia({ audio: true }).then((stream) => {
-  const micSource = audioContext.createMediaStreamSource(stream);
-  micSource.connect(analyser);
+function lerpColor(c1, c2, t) {
+  return c1.map((v, i) => v + (c2[i] - v) * t);
+}
+
+const baseColorInput = document.getElementById('baseColor');
+const loudBodyColorInput = document.getElementById('loudBodyColor');
+const quietBGColorInput = document.getElementById('quietBackgroundColor');
+const loudBGColorInput = document.getElementById('loudBackgroundColor');
+
+let baseColorVec3 = hexToRGBVec3(baseColorInput.value);
+let loudBodyColorVec3 = hexToRGBVec3(loudBodyColorInput.value);
+let quietBGColorVec3 = hexToRGBVec3(quietBGColorInput.value);
+let loudBGColorVec3 = hexToRGBVec3(loudBGColorInput.value);
+
+baseColorInput.addEventListener('input', () => {
+  baseColorVec3 = hexToRGBVec3(baseColorInput.value);
+});
+loudBodyColorInput.addEventListener('input', () => {
+  loudBodyColorVec3 = hexToRGBVec3(loudBodyColorInput.value);
+});
+quietBGColorInput.addEventListener('input', () => {
+  quietBGColorVec3 = hexToRGBVec3(quietBGColorInput.value);
+});
+loudBGColorInput.addEventListener('input', () => {
+  loudBGColorVec3 = hexToRGBVec3(loudBGColorInput.value);
 });
 
 // === SHADERS ===
@@ -42,6 +69,10 @@ const fragShaderSrc = `
   uniform sampler2D u_mask;
   uniform float u_time;
   uniform float u_audioLevel;
+  uniform vec3 u_baseColor;
+  uniform vec3 u_loudColor;
+  uniform vec3 u_quietBGColor;
+  uniform vec3 u_loudBGColor;
 
   float blur(vec2 uv, float radius) {
     float sum = 0.0;
@@ -60,8 +91,7 @@ const fragShaderSrc = `
     float mask = blur(uv, 2.5);
 
     if (mask < 0.05) {
-      // Use u_audioLevel to modulate background color (pink to purple to white)
-      vec3 bgColor = vec3(0.5 + u_audioLevel * 0.5, 0.0, 0.5 + u_audioLevel * 0.5);
+      vec3 bgColor = mix(u_quietBGColor, u_loudBGColor, u_audioLevel);
       gl_FragColor = vec4(bgColor, 1.0);
       return;
     }
@@ -73,14 +103,12 @@ const fragShaderSrc = `
     vec3 aura = mix(vec3(0.1, 0.8, 1.0), vec3(1.0, 0.1, 0.6), auraGlow);
     vec3 glow = aura * auraGlow + vec3(1.0, 0.5, 1.0) * halo * 0.5;
 
-    vec3 noisyPink = vec3(1.0, 0.1 + u_audioLevel * 0.5, 0.6 + u_audioLevel * 0.4);
-    noisyPink = clamp(noisyPink, 0.0, 1.0);
+    vec3 bodyColor = mix(u_baseColor, u_loudColor, u_audioLevel);
+    vec3 result = mix(glow, bodyColor, 0.8);
 
-    vec3 result = mix(glow, noisyPink, 0.8);
     gl_FragColor = vec4(result, softEdge);
   }
 `;
-
 
 function compileShader(src, type) {
   const shader = gl.createShader(type);
@@ -106,7 +134,14 @@ gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
 gl.enableVertexAttribArray(positionLocation);
 gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
 
-// === TEXTURES ===
+// === UNIFORMS ===
+const baseColorUniform = gl.getUniformLocation(program, 'u_baseColor');
+const loudColorUniform = gl.getUniformLocation(program, 'u_loudColor');
+const quietBGUniform = gl.getUniformLocation(program, 'u_quietBGColor');
+const loudBGUniform = gl.getUniformLocation(program, 'u_loudBGColor');
+const timeUniform = gl.getUniformLocation(program, 'u_time');
+const audioUniform = gl.getUniformLocation(program, 'u_audioLevel');
+
 function createTexture(index) {
   const tex = gl.createTexture();
   gl.activeTexture(gl.TEXTURE0 + index);
@@ -122,15 +157,11 @@ const videoTex = createTexture(0);
 const maskTex = createTexture(1);
 gl.uniform1i(gl.getUniformLocation(program, 'u_video'), 0);
 gl.uniform1i(gl.getUniformLocation(program, 'u_mask'), 1);
-const timeUniform = gl.getUniformLocation(program, 'u_time');
-const audioUniform = gl.getUniformLocation(program, 'u_audioLevel');
 
 function render(video, mask, time) {
   analyser.getByteFrequencyData(dataArray);
   let sum = 0;
-  for (let i = 0; i < dataArray.length; i++) {
-    sum += dataArray[i];
-  }
+  for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
   audioLevel = (sum / dataArray.length / 255) * 3.0;
   audioLevel = Math.min(audioLevel, 1.0);
   gl.clear(gl.COLOR_BUFFER_BIT);
@@ -145,6 +176,15 @@ function render(video, mask, time) {
 
   gl.uniform1f(timeUniform, time * 0.001);
   gl.uniform1f(audioUniform, audioLevel);
+
+  const bodyColor = lerpColor(baseColorVec3, loudBodyColorVec3, audioLevel);
+  const bgColor = lerpColor(quietBGColorVec3, loudBGColorVec3, audioLevel);
+
+  gl.uniform3fv(baseColorUniform, bodyColor);
+  gl.uniform3fv(loudColorUniform, loudBodyColorVec3);
+  gl.uniform3fv(quietBGUniform, quietBGColorVec3);
+  gl.uniform3fv(loudBGUniform, loudBGColorVec3);
+
   gl.drawArrays(gl.TRIANGLES, 0, 6);
 }
 
@@ -157,9 +197,11 @@ holistic.setOptions({
   modelComplexity: 1,
   smoothLandmarks: true,
   enableSegmentation: true,
-  refineFaceLandmarks: true,
+  refineFaceLandmarks: false,
   minDetectionConfidence: 0.5,
-  minTrackingConfidence: 0.5
+  minTrackingConfidence: 0.5,
+  faceLandmarks: false,
+  refineFaceLandmarks: false,
 });
 
 let lastMask = document.createElement('canvas');
@@ -175,15 +217,9 @@ holistic.onResults((results) => {
   }
 
   canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-  // const pinkG = Math.floor(60 + audioLevel * 180);  // green: 60 → 240
-  // const pinkB = Math.floor(130 + audioLevel * 100); // blue: 130 → 230
-  // const skeletonColor = `rgb(255, ${pinkG}, ${pinkB})`;
-  // canvasCtx.shadowColor = '#FF33CC'; // glowing pink
-  // canvasCtx.shadowBlur = 20;
-  const r = 255;
-  const g = Math.floor((0.1 + audioLevel * 0.5) * 255 * 0.99); // slightly darker
-  const b = Math.floor((0.6 + audioLevel * 0.4) * 255 * 0.99); // slightly darker
-  const skeletonColor = `rgb(${r}, ${g}, ${b})`;
+  const skeletonColorVec3 = lerpColor(baseColorVec3, loudBodyColorVec3, audioLevel);
+  const [r, g, b] = skeletonColorVec3.map(c => Math.floor(c * 255));
+  const skeletonColor = `rgba(${r}, ${g}, ${b}, 0.55)`;
 
   canvasCtx.shadowColor = skeletonColor;
   canvasCtx.strokeStyle = skeletonColor;
@@ -191,64 +227,86 @@ holistic.onResults((results) => {
   canvasCtx.shadowBlur = 20;
 
 
-  if (results.poseLandmarks && results.faceLandmarks) {
+  if (results.poseLandmarks) {
     const pose = results.poseLandmarks;
-    const face = results.faceLandmarks;
 
     const leftShoulder = pose[11];
     const rightShoulder = pose[12];
     const leftHip = pose[23];
     const rightHip = pose[24];
-    const nose = face[1];
+    const nose = pose[0]; // or use leftEyeInner/outer as fallback for top of neck
 
     const centerX = nose.x * canvasElement.width;
     const centerY = nose.y * canvasElement.height;
 
-    // Midpoints
     const shoulderX = ((leftShoulder.x + rightShoulder.x) / 2) * canvasElement.width;
     const shoulderY = ((leftShoulder.y + rightShoulder.y) / 2) * canvasElement.height;
     const hipX = ((leftHip.x + rightHip.x) / 2) * canvasElement.width;
     const hipY = ((leftHip.y + rightHip.y) / 2) * canvasElement.height;
 
-    // === Spine: shoulder midpoint → hip midpoint ===
+    // === Spine: shoulder → hip ===
     canvasCtx.beginPath();
     canvasCtx.moveTo(shoulderX, shoulderY);
     canvasCtx.lineTo(hipX, hipY);
-    canvasCtx.strokeStyle = skeletonColor;
-    canvasCtx.lineWidth = 6;
-    canvasCtx.shadowColor = skeletonColor; // lighter glow
-    canvasCtx.shadowBlur = 20;
+    canvasCtx.lineWidth = 8;
     canvasCtx.stroke();
 
-    // === Neck ===
-    canvasCtx.beginPath();
-    canvasCtx.moveTo(shoulderX, shoulderY);
-    canvasCtx.lineTo(centerX, centerY + 10);
-    canvasCtx.strokeStyle = skeletonColor;
-    canvasCtx.lineWidth = 6;
-    canvasCtx.shadowColor = skeletonColor;
-    canvasCtx.shadowBlur = 20;
-    canvasCtx.stroke();
+    // === Neck: shoulder → head (estimated from nose or keypoint 0)
 
-    // === Head Circle ===
+    // === Head Circle
+    const leftEye = pose[2];
+    const rightEye = pose[5];
+
+    // Convert normalized coordinates to canvas space
+    const lx = leftEye.x * canvasElement.width;
+    const ly = leftEye.y * canvasElement.height;
+    const rx = rightEye.x * canvasElement.width;
+    const ry = rightEye.y * canvasElement.height;
+
+    // Calculate distance between eyes
+    const eyeDist = Math.hypot(rx - lx, ry - ly);
+
+    // Use half the eye distance as radius (or adjust as needed)
+    const headRadius = eyeDist * 0.75;  // tweak multiplier for best fit
+
+    // Draw the head circle with dynamic radius
     canvasCtx.beginPath();
-    canvasCtx.arc(centerX, centerY, 35, 0, Math.PI * 2);
-    canvasCtx.fillStyle = skeletonColor;
-    canvasCtx.shadowColor = skeletonColor;
-    canvasCtx.shadowBlur = 20;
+    canvasCtx.arc(centerX, centerY, headRadius, 0, Math.PI * 2);
+    canvasCtx.lineWidth = 8;
     canvasCtx.fill();
 
-    canvasCtx.shadowBlur = 0;
+    canvasCtx.beginPath();
+    canvasCtx.moveTo(shoulderX, shoulderY);
+    canvasCtx.lineTo(centerX, centerY + headRadius); // adjust if needed
+    canvasCtx.lineWidth = 8;
+    canvasCtx.stroke();
   }
-
+  const SHOULDER_ARM_CONNECTIONS = [
+    [11, 13], // left shoulder to left elbow
+    [13, 15], // left elbow to left wrist
+    [12, 14], // right shoulder to right elbow
+    [14, 16], // right elbow to right wrist
+    [11, 12], // left shoulder to right shoulder
+  ];
 
   if (results.poseLandmarks) {
-    drawConnectors(canvasCtx, results.poseLandmarks, POSE_CONNECTIONS, { color: skeletonColor, lineWidth: 8 });
-    drawLandmarks(canvasCtx, results.poseLandmarks, { color: skeletonColor, lineWidth: 4 });
+    drawConnectors(canvasCtx, results.poseLandmarks, SHOULDER_ARM_CONNECTIONS, {
+      color: skeletonColor,
+      lineWidth: 8
+    });
+
+    // Optional: draw landmarks only for shoulders and arms
+    const armIndices = [11, 12, 13, 14, 15, 16];
+    const armLandmarks = armIndices.map(i => results.poseLandmarks[i]);
+
+    drawLandmarks(canvasCtx, armLandmarks, {
+      color: skeletonColor,
+      lineWidth: 4
+    });
   }
-  if (results.faceLandmarks) {
-    drawConnectors(canvasCtx, results.faceLandmarks, FACEMESH_TESSELATION, { color: skeletonColor, lineWidth: 2 });
-  }
+  // if (results.faceLandmarks) {
+  //   drawConnectors(canvasCtx, results.faceLandmarks, FACEMESH_TESSELATION, { color: skeletonColor, lineWidth: 2 });
+  // }
   if (results.leftHandLandmarks) {
     drawConnectors(canvasCtx, results.leftHandLandmarks, HAND_CONNECTIONS, { color: skeletonColor, lineWidth: 6 });
     drawLandmarks(canvasCtx, results.leftHandLandmarks, { color: skeletonColor, lineWidth: 4 });
@@ -268,3 +326,7 @@ const camera = new Camera(videoElement, {
   height: 480
 });
 camera.start();
+
+colorInput.addEventListener('input', () => {
+  baseColorVec3 = hexToRGBVec3(colorInput.value);
+});

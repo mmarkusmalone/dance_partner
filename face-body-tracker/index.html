@@ -8,12 +8,13 @@
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js"></script>
-
+    <link rel="stylesheet" href="https://use.typekit.net/lle1kea.css">
     <!-- <link rel="stylesheet" href="style.css" /> -->
     <style>
       body {
         margin: 0;
         display: flex;
+        font-family: "neue-haas-grotesk-display", sans-serif;
         justify-content: center;
         align-items: center;
         height: 100vh;
@@ -55,6 +56,30 @@
     </style>
   </head>
   <body>
+    <div style="position: absolute; top: 10%; left: 50%; transform: translate(-50%, -50%);
+            display: flex; color: white;flex-direction: column; z-index: 100; padding: 0px;">
+      
+      <label>
+        Quiet Body Color:
+        <input type="color" id="baseColor" value="#ff33cc" />
+      </label>
+
+      <label>
+        Loud Body Color:
+        <input type="color" id="loudBodyColor" value="#ff8800" />
+      </label>
+
+      <label>
+        Quiet Background Color:
+        <input type="color" id="quietBackgroundColor" value="#990099" />
+      </label>
+
+      <label>
+        Loud Background Color:
+        <input type="color" id="loudBackgroundColor" value="#330066" />
+      </label>
+
+    </div>
     <video id="webcam" autoplay playsinline></video>
     <div class="canvas-wrapper">
       <canvas id="webglAura" width="640" height="480"></canvas>
