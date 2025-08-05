@@ -97,11 +97,11 @@ const fragShaderSrc = `
     }
 
     float softEdge = smoothstep(0.1, 0.5, mask);
-    float auraGlow = smoothstep(0.1, 0.9, mask);
-    float halo = smoothstep(0.0, 0.1, mask);
+    float auraGlow = smoothstep(0.05, 0.8, mask);
+    float halo = smoothstep(0.0, 0.05, mask);
 
-    vec3 aura = mix(vec3(0.1, 0.8, 1.0), vec3(1.0, 0.1, 0.6), auraGlow);
-    vec3 glow = aura * auraGlow + vec3(1.0, 0.5, 1.0) * halo * 0.5;
+    vec3 aura = mix(vec3(0.2, 1.0, 1.0), vec3(1.0, 0.2, 1.0), auraGlow);
+    vec3 glow = aura * auraGlow * 2.0 + vec3(1.0, 0.5, 1.0) * halo * 1.0;
 
     vec3 bodyColor = mix(u_baseColor, u_loudColor, u_audioLevel);
     vec3 result = mix(glow, bodyColor, 0.8);
@@ -281,16 +281,26 @@ holistic.onResults((results) => {
     canvasCtx.lineWidth = 8;
     canvasCtx.stroke();
   }
-  const SHOULDER_ARM_CONNECTIONS = [
-    [11, 13], // left shoulder to left elbow
-    [13, 15], // left elbow to left wrist
-    [12, 14], // right shoulder to right elbow
-    [14, 16], // right elbow to right wrist
-    [11, 12], // left shoulder to right shoulder
+  const POSE_CONNECTIONS = [
+    // Arms
+    [11, 13], [13, 15],         // Left arm
+    [12, 14], [14, 16],         // Right arm
+    [11, 12],                   // Shoulders
+
+    // Torso
+    [23, 24],                   // Hip-to-hip only (no shoulder-hip)
+
+    // Legs
+    [23, 25], [25, 27],         // Left thigh to ankle
+    [24, 26], [26, 28],         // Right thigh to ankle
+
+    // Feet
+    [27, 29], [29, 31],         // Left ankle → heel → foot index
+    [28, 30], [30, 32]          // Right ankle → heel → foot index
   ];
 
   if (results.poseLandmarks) {
-    drawConnectors(canvasCtx, results.poseLandmarks, SHOULDER_ARM_CONNECTIONS, {
+    drawConnectors(canvasCtx, results.poseLandmarks, POSE_CONNECTIONS, {
       color: skeletonColor,
       lineWidth: 8
     });
