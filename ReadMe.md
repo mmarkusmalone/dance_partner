@@ -4,7 +4,9 @@ This app tracks your movements in real time with MediaPipe and outputs a skelato
 
 An interactive web app that combines a click counter with real-time WebGL visual effects and webcam integration. Built with vanilla JavaScript, HTML, and CSS, this project demonstrates DOM manipulation, animation, and live video processing — all wrapped in a clean, modern UI. 
 
-![JavaScript Logo](./javascript.svg)
+<img width="628" height="481" alt="Screenshot 2025-08-04 at 5 26 20 PM" src="https://github.com/user-attachments/assets/699afb7e-e9ef-466e-8e7f-ddb92aea3ea9" />
+
+
 
 ---
 
